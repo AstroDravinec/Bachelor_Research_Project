@@ -1,2 +1,3 @@
 # Bachelor_Research_Project
-All code used in data analysis
+This repository contains all code used for data analysis of my bachelor project: "Real-Time Modeling of a PEMFC Using Equivalent Circuits"
+
