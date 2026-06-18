@@ -3,4 +3,143 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy as sp
+import emcee
 
+#example IV curve data
+data_0 = pd.read_csv("Raw_Data/Polarization_Curve/Example_polarization curve.csv")
+
+#formatting
+data = pd.DataFrame()
+data["I"] = -data_0["Im"]
+data["V"] = data_0["Vf"]
+data["T"] = data_0["T"]
+#assigned error
+data["V_err"] = 0.0005
+
+#open circuit voltage
+ocv = np.max(data["V"])
+
+#estimating i_lim using a gradient local minimum
+dVdI = np.gradient(data["V"].to_numpy(), data["I"].to_numpy())
+
+i_lim_est = data["I"].to_numpy()[np.argmin(dVdI)]
+print(i_lim_est)
+
+#model function 
+def V_th(I,a,b,n, I_lim =i_lim_est,R_ohm = 0.44658566739134287, ocv= ocv):
+    '''model function modelling the output voltage of a fuel cell. Includes:
+    - ohmic losses
+    - activation losses
+    -concentration losses '''
+
+    #protection against ln(0)
+    I = np.clip(I, 1e-12,None)
+    return ocv - I*R_ohm - (a+b*np.log(np.clip(I, 1e-12, None)))-n *np.log(1- I/I_lim + 1e-12)
+    
+
+#BAYESIAN
+
+#model = Vth
+#uniform priors on all parameters with protection
+def priors(theta):
+    '''priors and bounds on a,b,c'''
+    a,b,c= theta
+    if 0<a<1 and 0<b<1 and -10<c<10:
+        return np.log(1/10)*3
+    return -np.inf
+
+
+#log likelihood
+def log_likelihood(theta, v_obs,i_obs, v_err):
+    '''gaussian log likelihood'''
+    a, b, n = theta
+    model = V_th(i_obs,a,b,n)
+    return -0.5 * np.sum(((v_obs - model) / v_err)**2+ np.log(2 * np.pi * v_err**2)) 
+    
+
+#log probability
+def log_probability(theta, v_obs,i_obs,v_err):
+    '''log probability'''
+    likelihood = np.array(log_likelihood(theta, v_obs,i_obs,v_err))
+    prior = priors(theta)
+    L = likelihood + prior
+    
+    return L
+
+#MCMC
+ndim = 3
+nwalkers = 15
+opt = np.array([0.2, 0.02, 0.1])
+
+p0 = np.array([
+    opt + opt * 0.01 * np.random.randn(ndim)
+    for _ in range(nwalkers)
+])
+sampler = emcee.EnsembleSampler(
+    nwalkers,
+    ndim,
+    log_probability,
+    args=(data["V"], data["I"], data["V_err"]))
+
+# Run MCMC
+nsteps = 7000
+state = sampler.run_mcmc(p0,nsteps)
+samples = sampler.get_chain()
+
+#labels for plots
+labels = ["a", "b", "c"]
+
+chain = sampler.get_chain()
+
+
+#plotting trace plots
+fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+for i in range(3):
+    for w in range(chain.shape[1]):  # walkers
+        axes[i].plot(chain[:, w, i], alpha=0.3)
+    axes[i].set_title(f"Trace plot for {labels[i]}")
+
+axes[-1].set_xlabel("step")
+plt.show()
+
+#acceptance fraction
+print(f"acceptance fraction = {np.mean(sampler.acceptance_fraction)}")
+
+#autocorrelation time
+tau = sampler.get_autocorr_time()
+print(f"autocorrelation time = {tau}")
+
+# Burn in, merging walkers
+samples1 = sampler.get_chain(discard = 2000, flat=True)
+
+#medians and credible intervals
+M =[]
+C = []
+
+#plotting probability distributions for a,b, and c
+fig, ax = plt.subplots(3,1, figsize = (10,7))
+for i in range(3):
+    
+    ax[i].hist(samples1[:, i], 100, color="k", histtype="step", label = 'sampled posterior')
+    ax[i].set_title(labels[i], fontsize = 16)
+    
+    median = np.median(samples1[:,i])
+    credible_int = np.percentile(samples1[:,i], [5,95])
+    M.append(median)
+    C.append(credible_int)
+    
+    ax[i].axvline(median, color = 'r', ls = '--', label = 'median')
+    ax[i].axvspan(credible_int[0],credible_int[1],alpha = 0.3, label = 'credible interval')
+    ax[i].legend()
+
+    ax[i].set_yticks([])
+
+plt.tight_layout()
+
+#check the fit against the polarization curve
+plt.plot(data["I"][:-30], V_th(data["I"][:-30],M[0],M[1],M[2]),ls = '--')
+plt.errorbar(data["I"], data["V"], ls = '', marker = '.', color = 'orange')
+
+plt.xlabel("Current (A)")
+plt.ylabel("Voltage (V)")
+plt.show()
