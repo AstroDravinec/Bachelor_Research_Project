@@ -135,6 +135,7 @@ for i in range(3):
     ax[i].set_yticks([])
 
 plt.tight_layout()
+plt.show()
 
 #check the fit against the polarization curve
 plt.plot(data["I"][:-30], V_th(data["I"][:-30],M[0],M[1],M[2]),ls = '--')
