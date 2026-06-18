@@ -1,0 +1,178 @@
+#%%
+#importing libraries
+import numpy as np
+import scipy as sp
+import matplotlib.pyplot as plt
+import pandas as pd
+from scipy.optimize import curve_fit
+
+#importing data with cols: Time, Voltage, Current
+data1_1 = pd.read_csv("Raw_Data/Current_Switching/10062026_current_step_nan_20.csv") #open switch-20 ohm
+data2_2 = pd.read_csv("Raw_Data/Current_Switching/10062026_current_step_nan_50.csv") #open switch-50 ohm
+data3 = pd.read_csv("Raw_Data/Current_Switching/26052026_current_step_nan_20.csv") #open switch-20 ohm
+data4 = pd.read_csv("Raw_Data/Current_Switching/26052026_current_step_nan_50.csv") #open switch-50 ohm
+
+#formatting data1 and data2:
+
+#setting time cutoff after which data is not relevant
+cutoffs = [100, 160]
+
+#counter
+i = 0
+#storing relevant indices
+indices = []
+
+dt = [data1_1, data2_2]
+
+#formatting
+for data in dt:
+    for j in range(len(data["Time"])):
+        #if Time exceeds cutoff, record index
+        if data["Time"][j] > cutoffs[i]:
+            indices.append(j-1)
+            break
+    i += 1
+
+#datasets for data analysis
+data1 = data1_1[:indices[0]]
+data2 = data2_2[:indices[1]]
+
+
+#plotting for visualization: Voltage, Current, dV/dt
+fig, ax = plt.subplots(3, 4, figsize = (20,20), layout = 'constrained')
+Data= [data1, data2, data3, data4]
+#resistances used
+R = [20, 50, 20, 50]
+
+#storing time for which ohmic losses dominate
+t_ohm = []
+
+i = 0
+for data in Data:
+    ax[0,i].plot(data["Time"], data["Voltage"], marker = '.', ls = '')
+    ax[0,i].set_xlabel("Time (s)")
+    ax[0,i].set_ylabel("Voltage (V)")
+    ax[0,i].set_title(f"{R[i]}")
+    ax[1,i].plot(data["Time"],data["Current"], color = "orange", marker = '.', ls ='')
+    ax[1,i].set_xlabel("Time (s)")
+    ax[1,i].set_ylabel("Current (A)")
+    ax[1,i].set_title(f"{R[i]}")
+    
+    #derivative of voltage to see where ohmic spike is
+    dVdt = np.gradient(data["Voltage"], data["Time"])
+    ax[2,i].plot(data["Time"], dVdt, ls = '--', color = "r")
+    ax[2,i].set_title(f"Derivative:{R[i]}")
+    min_i = np.argmin(dVdt)
+    ax[2,i].axvline(data["Time"][min_i], ls = '-', c = 'k', label = data["Time"][min_i])
+    ax[2,i].legend()
+    
+    #t_ohmic
+    t_ohm.append(min_i)
+    
+    i+=1
+plt.tight_layout()
+
+#Calculating R_ohm and C_act:
+
+#counter
+i = 0
+
+#quantities wanted
+R_ohm = []
+R_act = []
+C_act = []
+R_load = []
+
+#parameters of fit function stored here
+P = []
+
+for data in Data:
+    
+    #final current cutoff
+    cutoff = [11, 15, 15,40,140]
+    
+    
+    #finding index at which resistance turns on
+    index = 0
+    for j in range(len(data["Current"])):
+        if data["Current"][j]<0.002:
+            index = j
+        else:
+            break
+    
+    #voltage and time before turn switch
+    V_0 = data["Voltage"].iloc[:index].mean()
+    t_0 = data["Time"][index]
+    
+    #time for ohmic losses:
+    V_t0plus = data["Voltage"][t_ohm[i]]
+    
+    #final current, voltage:
+    
+    index1 = 0
+    for j in range(len(data["Time"])):
+        
+        if data["Time"][j] > cutoff[i]:
+            index1 = j
+            break
+    I_f = data["Current"].iloc[index1:].mean()
+    V_f = data["Voltage"].iloc[index1:].mean()
+    
+    #Load R
+    R_l = V_f/I_f
+    R_load.append(R_l)
+    
+    #equation for tau
+    
+    tau_plus_t0 = 0
+    
+    V_t0_plus_tau = V_t0plus - (V_t0plus - V_f)*0.368
+    for j in range(len(data["Voltage"])):
+        if data["Voltage"][j]<V_t0_plus_tau:
+            tau_plus_t0 = data["Time"][j]
+            break
+    #tau = tau_plus_t0 - t_0
+    
+    
+    
+    #MODEL for tau
+    def model(t,A,B,tau):
+        return (A*(1-np.exp(-(t-t_0)/tau)) + B*np.exp(-(t-t_0)/tau))*V_0
+
+    t = data["Time"][t_ohm[i]:]
+    V = data["Voltage"][t_ohm[i]:]
+    params, cov = curve_fit(model, t, V)
+    P.append(params)
+    #time constant
+    tau = params[2]
+    print(f'tau = {tau}')
+    
+ 
+    R_r = ((V_0/V_t0plus) * R_l) - R_l
+    R_a =(R_l * V_0/V_f)-R_l - R_r
+    C_a = tau*((R_l + R_r + R_a)/(R_a*R_l + R_a*R_r))
+    
+    #values
+    R_ohm.append(R_r)
+    R_act.append(R_a)
+    C_act.append(C_a)
+
+    #errors
+
+    
+    
+    i+=1
+
+#final values for R_ohm and C_act:
+R_ohm_final = np.mean(R_ohm)
+C_act_final = np.mean(C_act)
+
+#standard error in means:
+R_err = np.std(R_ohm)/np.sqrt(len(R_ohm))
+C_err = np.std(C_act)/np.sqrt(len(C_act))
+
+#print final values
+print("Final Values:")
+print(f"R_ohm = {R_ohm_final} \u00B1 {R_err}")
+print(f"C_act = {C_act_final} \u00B1 {C_err}")
+# %%
