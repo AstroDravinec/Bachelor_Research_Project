@@ -1,0 +1,184 @@
+#importing necessary libraries
+import board
+import busio
+import adafruit_ads1x15.ads1115 as ADS
+from adafruit_ads1x15.analog_in import AnalogIn
+import csv
+import time
+import adafruit_ina219
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib import style
+from fmpy.fmi2 import FMU2Slave
+from fmpy import read_model_description, extract
+
+# Create the I2C bus
+i2c = busio.I2C (board.SCL, board.SDA)
+
+# Create the ADC object using the I2C bus
+ads = ADS.ADS1115 (i2c)
+#create INA219 pbject on same bus
+ina219 = adafruit_ina219.INA219(i2c)
+
+#first channel is voltage of fuel cell
+V_fc = AnalogIn(ads, 0)
+
+
+#simulation path
+fmu_path = "/tmp/OpenModelica_hydrogen/OMEdit/PEMFC_simple_equivalent_circuit_model.fmu"
+
+unzipdir = extract(fmu_path)
+md = read_model_description(fmu_path)
+
+# map variable names
+vrs = {v.name: v.valueReference for v in md.modelVariables}
+
+fmu = FMU2Slave(
+    guid=md.guid,
+    unzipDirectory=unzipdir,
+    modelIdentifier=md.coSimulation.modelIdentifier,
+    instanceName="fc"
+)
+
+fmu.instantiate()
+fmu.setupExperiment(startTime=0.0)
+fmu.enterInitializationMode()
+fmu.exitInitializationMode()
+
+#live plotting setup
+plt.ion()
+fig, (ax1, ax2) = plt.subplots(2,1,figsize = (8,6))
+
+#for plotting 
+t_data = []
+real_data = []
+model_data = []
+r_data = []
+
+#for csv
+T_data = []
+REAL_data = []
+MODEL_data = []
+R_data = []
+
+line1, = ax1.plot([], [], label="Real FC Voltage")
+line2, = ax1.plot([], [], label="Model Voltage")
+line3, = ax2.plot([], [], label="Load Resistance", color="green")
+
+
+ax1.set_xlabel("Time (s)")
+ax1.set_ylabel("Voltage (V)")
+ax1.set_ylim(0.3, 1.23)
+ax1.legend()
+
+
+ax2.set_xlabel("Time (s)")
+ax2.set_ylabel("Resistance (Ω)")
+ax2.set_ylim(0, 210)
+ax2.legend()
+
+
+#start user flow
+time.sleep(2)
+print("Disconnect the load, and make sure the open circuit voltage (ocv) has stabilized")
+time.sleep(0.3)
+input("Press enter to continue...")
+
+print("Measuring the ocv")
+V_oc = V_fc.voltage
+time.sleep(0.5)
+input("To start the simulation press enter...")
+
+print("LIVE simulation started... Press Ctrl+C to stop")
+time.sleep(3)
+
+try:
+    t = 0.0
+    step = 0.1
+    #ocv
+    fmu.setReal([vrs["v_in"]], [V_oc])
+
+    while True:
+        loop_start = time.time()
+        
+        I_fc = ina219.current / 1000
+        v_fc = V_fc.voltage
+
+        # protect against division by zero
+        R = v_fc / max(I_fc, 1e-6)
+        # send input
+
+        fmu.setReal([vrs["Input_Load"]], [R])
+                
+        # advance simulation
+        fmu.doStep(t, step)
+        
+        #get simulated voltage
+        V_model = fmu.getReal([vrs["V_sensor.v"]])[0]
+        
+        #save data for plotting 
+        t_data.append(t)
+        real_data.append(v_fc)
+        model_data.append(V_model)
+        r_data.append(R)
+
+        # keep last 200 points
+        t_data = t_data[-200:]
+        real_data = real_data[-200:]
+        model_data = model_data[-200:]
+        r_data = r_data[-200:]
+        
+        #save data for csv 
+        T_data.append(t)
+        REAL_data.append(v_fc)
+        MODEL_data.append(V_model)
+        R_data.append(R)      
+        
+        #update plot
+        line1.set_data(t_data, real_data)
+        line2.set_data(t_data, model_data)
+        line3.set_data(t_data, r_data)
+        
+        ax1.set_xlim(max(0, t - 20), t + 1)
+        ax2.set_xlim(max(0, t - 20), t + 1)
+        
+        plt.pause(0.001)
+
+        t += step
+
+        # real-time sync
+        elapsed = time.time() - loop_start
+        time.sleep(max(0, step - elapsed))
+
+except KeyboardInterrupt:
+    print("Stopped")
+    plt.close("all")
+    fmu.terminate()
+    fmu.freeInstance()
+
+#make csv if chosen by user
+
+while True:
+    answer = input("Do you want a csv? (Y/N)")
+    if answer == "Y" or answer == "y":
+        name = input("Name your csv (with .csv):")
+        print("making csv")
+        with open(name, 'w') as data:
+            writer = csv.writer(data)
+            #headings 
+            writer.writerow(["Real_V", "Model_V", "R", "Time"])
+            #values
+            for index in range(len(T_data)):
+                v_r = REAL_data[index]
+                v_m = MODEL_data[index]
+                r = R_data[index]
+                t = T_data[index]
+                writer.writerow([v_r, v_m, r, t])
+        data.close()
+
+        break
+    elif answer == "N" or answer == "n":
+        print("THIS IS THE END")
+        break
+    else:
+        print("What...?")
