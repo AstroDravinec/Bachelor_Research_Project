@@ -1,0 +1,238 @@
+#importing libraries
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
+#OCV before and after comparison; figures 8 & 9:
+data_ocv1 = pd.read_csv("Raw_Data/Model_Validation/11062026_ocv_comparison_1_and_slow_slope.csv")
+index = []
+
+#cutoff based on time, filtering data wanted
+cut = [6,61]
+
+#find indices of times at cutoff
+for i in range(len(data_ocv1["Time"])):
+    if data_ocv1["Time"][i] > cut[0] and len(index)<1:
+        index.append(i) 
+    
+    if data_ocv1["Time"][i] > cut[1] and len(index)<2:
+        index.append(i)
+        
+        
+#plotting near ocv
+fig, ax  = plt.subplots(1,2, layout = 'constrained', figsize = (9,3), sharey = True)
+ax[0].plot(data_ocv1["Time"][:index[0]], data_ocv1["Real_V"][:index[0]], ls = '', marker = '.', label = 'FC Output')
+ax[0].plot(data_ocv1["Time"][:index[0]], data_ocv1["Model_V"][:index[0]], ls = '--', marker = '', label = 'Model Output')
+ax[0].legend()
+ax[0].set_xlabel("Time (s)")
+ax[0].set_ylabel("Voltage (V)")
+ax[0].set_title("Before")
+
+ax[1].plot(data_ocv1["Time"][index[1]:], data_ocv1["Real_V"][index[1]:], ls = '', marker = '.', label = 'FC Output')
+ax[1].plot(data_ocv1["Time"][index[1]:], data_ocv1["Model_V"][index[1]:], ls = '--', marker = '', label = 'Model Output')
+ax[1].legend()
+ax[1].set_xlabel("Time (s)")
+ax[1].set_title("After")
+
+plt.show()
+
+#figure 9
+
+data_ocv2=pd.read_csv("Raw_Data/Model_Validation/15062026_ocv_comparison_2.csv")
+index = []
+cutoff = [5,50]
+
+#formatting data, cutting irrelevant parts
+for i in range(len(data_ocv2["Time"])):
+    if data_ocv2["Time"][i] > cutoff[0] and len(index)<1:
+        index.append(i) 
+    
+    if data_ocv2["Time"][i] > cutoff[1] and len(index)<2:
+        index.append(i)
+
+
+#plotting
+fig, ax  = plt.subplots(1,2, layout = 'constrained', figsize = (9,3), sharey = True)
+ax[0].plot(data_ocv2["Time"][:index[0]], data_ocv2["Real_V"][:index[0]], ls = '', marker = '.', label = 'FC Output')
+ax[0].plot(data_ocv2["Time"][:index[0]], data_ocv2["Model_V"][:index[0]], ls = '--', marker = '', label = 'Model Output')
+ax[0].legend()
+ax[0].set_xlabel("Time (s)")
+ax[0].set_ylabel("Voltage (V)")
+ax[0].set_title("Before")
+
+ax[1].plot(data_ocv2["Time"][index[1]:], data_ocv2["Real_V"][index[1]:], ls = '', marker = '.', label = 'FC Output')
+ax[1].plot(data_ocv2["Time"][index[1]:], data_ocv2["Model_V"][index[1]:], ls = '--', marker = '', label = 'Model Output')
+ax[1].legend()
+ax[1].set_xlabel("Time (s)")
+ax[1].set_title("After")
+
+plt.show()
+
+#current step: figures 10, 11
+data1 = pd.read_csv("Raw_Data/Model_Validation/04062026_nan-20-nan.csv") #open- 20 ohm - open
+data2 = pd.read_csv("Raw_Data/Model_Validation/04062026_nan-50-nan.csv") #open - 50 ohm - open
+
+#figure 10
+fig, ax = plt.subplots(2,1, figsize = (9,4), sharex = True)
+fig.suptitle("open - 20Ω - open")
+
+ax[0].plot(data1["Time"], data1["Real_V"], ls = '', marker = '.', label = 'FC Output Voltage')
+ax[0].plot(data1["Time"], data1["Model_V"], ls = '--', marker = '', label = 'Model Output Voltage')
+
+ax[0].set_ylabel("Voltage (V)")
+ax[0].legend()
+
+ax[1].plot(data1["Time"], data1["R"], ls = '--', marker = '', label = 'Resistance', color = 'g')
+ax[1].set_xlabel("Time (s)")
+ax[1].set_ylabel("Resistance (Ω)")
+ax[1].legend()
+ax[1].set_ylim(0,105)
+
+plt.tight_layout()
+plt.show()
+
+#figure 11
+fig, ax = plt.subplots(2,1,figsize = (9,4), sharex = True, layout = 'constrained')
+fig.suptitle("open - 50Ω - open")
+ax[0].plot(data2["Time"], data2["Real_V"], ls = '', marker = '.', label = 'FC Output Voltage')
+ax[0].plot(data2["Time"], data2["Model_V"], ls = '--', marker = '', label = 'Model Output Voltage')
+
+ax[0].set_ylabel("Voltage (V)")
+ax[0].legend()
+
+ax[1].plot(data2["Time"], data2["R"], ls = '--', marker = '', label = 'Resistance', color = 'g')
+ax[1].set_xlabel("Time (s)")
+ax[1].set_ylabel("Resistance (Ω)")
+ax[1].legend()
+ax[1].set_ylim(0,105)
+plt.show()
+
+#Slow slope graph; figure 12 and 13
+data_slope = pd.read_csv("Raw_Data/Model_Validation/11062026_ocv_comparison_1_and_slow_slope.csv")
+
+#cutoff point, splitting slope in up and down part
+cut = 35
+#recording the index
+ind = 0
+
+#finding index
+for i in range(len(data_slope["Time"])):
+    if data_slope["Time"][i] >= cut:
+        ind = i
+        break
+
+#plotting slope descent
+fig, ax = plt.subplots(3,1, layout = 'constrained', figsize = (10,6), sharex = True)
+
+ax[0].plot(data_slope["Time"][:ind], data_slope["Real_V"][:ind], marker = '.', ls = '', label = "FC Output")
+ax[0].plot(data_slope["Time"][:ind], data_slope["Model_V"][:ind], marker = '', ls = '--', label = "Model Output")
+ax[0].set_ylabel("Voltage (V)")
+ax[0].legend()
+
+ax[1].plot(data_slope["Time"][:ind], data_slope["Model_V"][:ind] - data_slope["Real_V"][:ind], marker = '.', ls = '', label = "difference", color = 'r')
+
+ax[1].set_ylabel("Voltage (V)")
+ax[1].legend()
+
+
+ax[2].plot(data_slope["Time"][:ind], data_slope["R"][:ind], marker = '', ls = '--', label = "Resistance", color = 'g')
+ax[2].set_ylabel("Resistance (Ω)")
+ax[2].set_ylim(0,110)
+ax[2].set_xlabel("Time (s)")
+ax[2].legend()
+
+plt.show()
+
+#plotting ascent
+
+fig, ax = plt.subplots(3,1, layout = 'constrained', figsize = (10,6), sharex = True)
+
+ax[0].plot(data_slope["Time"][ind:-400], data_slope["Real_V"][ind:-400], marker = '.', ls = '', label = "FC Output")
+ax[0].plot(data_slope["Time"][ind:-400], data_slope["Model_V"][ind:-400], marker = '', ls = '--', label = "Model Output")
+ax[0].set_ylabel("Voltage (V)")
+ax[0].legend()
+
+ax[1].plot(data_slope["Time"][ind:-400], data_slope["Model_V"][ind:-400] - data_slope["Real_V"][ind:-400], marker = '.', ls = '', label = "difference", color = 'r')
+
+ax[1].set_ylabel("Voltage (V)")
+ax[1].legend()
+
+
+ax[2].plot(data_slope["Time"][ind:-400], data_slope["R"][ind:-400], marker = '', ls = '--', label = "Resistance", color = 'g')
+ax[2].set_ylabel("Resistance (Ω)")
+ax[2].set_ylim(0,110)
+ax[2].set_xlabel("Time (s)")
+ax[2].legend()
+
+plt.show()
+
+#concentration region: figure 14
+
+data_slow_slope = pd.read_csv("Raw_Data/Model_Validation/10062026_slow_slope.csv")
+#cutoff points in time
+boundaries = [45,62]
+#recording indices
+index = []
+
+for i in range(len(data_slow_slope["Time"])):
+    if data_slow_slope["Time"][i] > boundaries[0] and len(index) == 0:
+        index.append(i)
+    elif data_slow_slope["Time"][i] > boundaries[1] and len(index) == 1:
+        index.append(i)
+        
+
+#plotting
+fig, ax = plt.subplots(2,1, layout = 'constrained', figsize = (10,4), sharex = True)
+
+ax[0].plot(data_slow_slope["Time"][index[0]:index[1]], data_slow_slope["Real_V"][index[0]:index[1]], ls = '', marker = '.', label = 'FC output')
+ax[0].plot(data_slow_slope["Time"][index[0]:index[1]], data_slow_slope["Model_V"][index[0]:index[1]], ls = '--', marker = '', label = 'Model output')
+ax[0].set_ylabel("Voltage (V)")
+ax[0].legend()
+
+ax[1].plot(data_slow_slope["Time"][index[0]:index[1]], data_slow_slope["R"][index[0]:index[1]], ls = '--', marker = '',color='g', label = 'Resistance')
+ax[1].set_xlabel("Time (s)")
+ax[1].set_ylabel("Resistance (Ω)")
+ax[1].legend()
+ax[1].set_ylim(0,20)
+
+plt.show()
+
+#figure 15; comparison of slope speeds
+
+data_medium_slope = pd.read_csv("Raw_Data/Model_Validation/10062026_medium_slope.csv")
+data_fast_slope = pd.read_csv("Raw_Data/Model_Validation/10062026_fast_slope.csv")
+
+slopes_data = [data_slow_slope, data_medium_slope, data_fast_slope]
+titles = ["Slow", "Medium", "Fast"]
+
+i =0
+#plotting
+fig, ax = plt.subplots(3,3, figsize=(10,10),sharex='col',sharey = 'row',layout = 'constrained', gridspec_kw={'height_ratios': ([2,1,1])}) 
+for data in slopes_data:  
+    ax[0,i].plot(data["Time"], data["Real_V"], ls = '', marker = '.', label = 'FC Output')
+    ax[0,i].plot(data["Time"], data["Model_V"], ls = '--', label = 'Model Prediction')
+    
+    ax[1,i].plot(data["Time"], data["Model_V"]-data["Real_V"], ls = '--', color = 'r', label = 'Difference')
+
+   
+    
+    
+    ax[2,i].plot(data["Time"], data["R"], ls = '--', color = 'g', label = 'Resistance')
+    ax[2,i].set_ylim(0,110)
+    ax[2,i].set_xlabel("Time (s)")
+    
+    ax[2,i].legend()
+    
+    ax[0,i].legend(fontsize = 11)
+    ax[1,i].legend(fontsize = 11)
+    ax[2,i].legend(fontsize = 11)
+    
+    ax[0,i].set_title(titles[i], fontsize = '14')
+    
+    if i == 0:
+        ax[0,i].set_ylabel("Voltage (V)")
+        ax[1,i].set_ylabel("Voltage (V)")
+        ax[2,i].set_ylabel("Resistance (Ω)")  
+    i+=1
+plt.show()
+
