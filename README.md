@@ -14,3 +14,6 @@ The data analysis folder contains the code used to analyze the data. It is divid
 1. Current Switching; used to determine R_ohm and C_act
 2. Bayesian Inferrence: used to infer parameters a,b, and c
 3. Model Validation: used to generate all plots found in the report
+
+## Model
+The file PEMFC_model.mo was used to model the fuel cell in Open Modelica
